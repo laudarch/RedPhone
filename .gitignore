@@ -9,3 +9,14 @@ RedPhone.iml
 out/
 local.properties
 ant.properties
+.gradle
+build
+signing.properties
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+obj/
+jni/libspeex/.deps/

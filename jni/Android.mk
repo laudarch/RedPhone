@@ -1,14 +1,58 @@
+JNI_DIR := $(call my-dir)
+
+include $(JNI_DIR)/libspeex/Android.mk
+
+include $(JNI_DIR)/webrtc/common_audio/signal_processing/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_processing/aec/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_processing/aecm/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_processing/agc/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_processing/ns/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_processing/utility/Android.mk
+include $(JNI_DIR)/webrtc/system_wrappers/source/Android.mk
+
+include $(JNI_DIR)/webrtc/modules/audio_coding/neteq/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_coding/codecs/g711/Android.mk
+include $(JNI_DIR)/webrtc/modules/audio_coding/codecs/cng/Android.mk
+include $(JNI_DIR)/webrtc/common_audio/vad/Android.mk
+
+include $(JNI_DIR)/openssl/Android.mk
+
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := -DFIXED_POINT -DEXPORT="" -UHAVE_CONFIG_H -DUSE_KISS_FFT -DHAVE_SINF -DHAVE_TANF -DHAVE_COSF -DHAVE_ASINF -DHAVE_ATANF -DHAVE_ACOSF -DHAVE_ATAN2F -DHAVE_CEILF -DHAVE_FLOORF -DHAVE_POWF -DHAVE_LOG10F
-LOCAL_MODULE := redspeex
-LOCAL_SRC_FILES :=  PacketLossConcealer.cpp plc.c time_scale.c playout.c cb_search.c 	exc_10_32_table.c 	exc_8_128_table.c \
-	filters.c 	gain_table.c 	hexc_table.c 	high_lsp_tables.c 	lsp.c \
-	ltp.c 	speex.c 	stereo.c 	vbr.c 	vq.c bits.c exc_10_16_table.c \
-	exc_20_32_table.c exc_5_256_table.c exc_5_64_table.c gain_table_lbr.c hexc_10_32_table.c \
-	lpc.c lsp_tables_nb.c modes.c modes_wb.c nb_celp.c quant_lsp.c sb_celp.c \
-	speex_callbacks.c speex_header.c window.c SpeexCodec.cpp
+LOCAL_MODULE     := redphone-audio
+LOCAL_C_INCLUDES := $(JNI_DIR)/libsrtp/include/ $(JNI_DIR)/libsrtp/crypto/include/ $(JNI_DIR)/libspeex/include/ $(JNI_DIR)/webrtc/ $(JNI_DIR)/openssl/include/ $(JNI_DIR)
+LOCAL_LDLIBS     += -lOpenSLES -llog
+LOCAL_CFLAGS     += -Wall
+
+LOCAL_SRC_FILES := \
+$(JNI_DIR)/redphone/MicrophoneReader.cpp \
+$(JNI_DIR)/redphone/AudioCodec.cpp \
+$(JNI_DIR)/redphone/RtpAudioSender.cpp \
+$(JNI_DIR)/redphone/RtpPacket.cpp \
+$(JNI_DIR)/redphone/RtpAudioReceiver.cpp \
+$(JNI_DIR)/redphone/AudioPlayer.cpp \
+$(JNI_DIR)/redphone/JitterBuffer.cpp \
+$(JNI_DIR)/redphone/CallAudioManager.cpp \
+$(JNI_DIR)/redphone/WebRtcJitterBuffer.cpp \
+$(JNI_DIR)/redphone/SrtpStream.cpp \
+$(JNI_DIR)/redphone/NetworkUtil.cpp
+
+LOCAL_STATIC_LIBRARIES := \
+libspeex \
+libwebrtc_aecm \
+libwebrtc_ns \
+libwebrtc_spl \
+libwebrtc_apm_utility \
+libwebrtc_system_wrappers \
+libwebrtc_neteq \
+libwebrtc_g711 \
+libwebrtc_cng \
+libwebrtc_spl \
+libwebrtc_vad \
+libcrypto_static
+
 
 include $(BUILD_SHARED_LIBRARY)
+

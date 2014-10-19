@@ -17,7 +17,11 @@
 
 package org.thoughtcrime.redphone;
 
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -27,6 +31,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.preference.PreferenceManager;
+import android.support.v4.app.NotificationCompat;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
@@ -39,6 +44,7 @@ import org.thoughtcrime.redphone.call.LockManager;
 import org.thoughtcrime.redphone.call.ResponderCallManager;
 import org.thoughtcrime.redphone.codec.CodecSetupException;
 import org.thoughtcrime.redphone.contacts.PersonInfo;
+import org.thoughtcrime.redphone.crypto.zrtp.SASInfo;
 import org.thoughtcrime.redphone.gcm.GCMRegistrarHelper;
 import org.thoughtcrime.redphone.pstn.CallStateView;
 import org.thoughtcrime.redphone.pstn.IncomingPstnCallListener;
@@ -73,6 +79,7 @@ public class RedPhoneService extends Service implements CallStateListener, CallS
   public static final String ACTION_DENY_CALL     = "org.thoughtcrime.redphone.RedPhoneService.DENYU_CALL";
   public static final String ACTION_HANGUP_CALL   = "org.thoughtcrime.redphone.RedPhoneService.HANGUP";
   public static final String ACTION_SET_MUTE      = "org.thoughtcrime.redphone.RedPhoneService.SET_MUTE";
+  public static final String ACTION_CONFIRM_SAS   = "org.thoughtcrime.redphone.RedPhoneService.CONFIRM_SAS";
 
   private static final String TAG = RedPhoneService.class.getName();
 
@@ -141,6 +148,7 @@ public class RedPhoneService extends Service implements CallStateListener, CallS
     else if (intent.getAction().equals(ACTION_DENY_CALL))                 handleDenyCall(intent);
     else if (intent.getAction().equals(ACTION_HANGUP_CALL))               handleHangupCall(intent);
     else if (intent.getAction().equals(ACTION_SET_MUTE))                  handleSetMute(intent);
+    else if (intent.getAction().equals(ACTION_CONFIRM_SAS))               handleConfirmSas(intent);
   }
 
   ///// Initializers
@@ -241,14 +249,18 @@ public class RedPhoneService extends Service implements CallStateListener, CallS
     state = RedPhone.STATE_ANSWERING;
     incomingRinger.stop();
     currentCallRecord = CallLogger.logIncomingCall(this, remoteNumber);
-    ((ResponderCallManager)this.currentCallManager).answer(true);
+    if (currentCallManager != null) {
+      ((ResponderCallManager)this.currentCallManager).answer(true);
+    }
   }
 
   private void handleDenyCall(Intent intent) {
     state = RedPhone.STATE_IDLE;
     incomingRinger.stop();
     CallLogger.logMissedCall(this, remoteNumber, System.currentTimeMillis());
-    ((ResponderCallManager)this.currentCallManager).answer(false);
+    if(currentCallManager != null) {
+      ((ResponderCallManager)this.currentCallManager).answer(false);
+    }
     this.terminate();
   }
 
@@ -259,8 +271,12 @@ public class RedPhoneService extends Service implements CallStateListener, CallS
   private void handleSetMute(Intent intent) {
     if(currentCallManager != null) {
       currentCallManager.setMute(intent.getBooleanExtra(Constants.MUTE_VALUE, false));
-
     }
+  }
+
+  private void handleConfirmSas(Intent intent) {
+    if (currentCallManager != null)
+      currentCallManager.setSasVerified();
   }
 
   /// Helper Methods
@@ -284,9 +300,9 @@ public class RedPhoneService extends Service implements CallStateListener, CallS
     return state;
   }
 
-  public String getCurrentCallSAS() {
+  public SASInfo getCurrentCallSAS() {
     if (currentCallManager != null)
-      return currentCallManager.getSAS();
+      return currentCallManager.getSasInfo();
     else
       return null;
   }
@@ -418,7 +434,7 @@ public class RedPhoneService extends Service implements CallStateListener, CallS
     sendMessage(RedPhone.HANDLE_CALL_RINGING, null);
   }
 
-  public void notifyCallConnected(String sas) {
+  public void notifyCallConnected(SASInfo sas) {
     outgoingRinger.playComplete();
     lockManager.updatePhoneState(LockManager.PhoneState.IN_CALL);
     state = RedPhone.STATE_CONNECTED;

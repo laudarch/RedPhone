@@ -22,8 +22,10 @@ import org.thoughtcrime.redphone.gcm.GCMRegistrarHelper;
 import org.thoughtcrime.redphone.signaling.AccountCreationException;
 import org.thoughtcrime.redphone.signaling.AccountCreationSocket;
 import org.thoughtcrime.redphone.signaling.DirectoryResponse;
+import org.thoughtcrime.redphone.signaling.RateLimitExceededException;
 import org.thoughtcrime.redphone.signaling.SignalingException;
 import org.thoughtcrime.redphone.ui.AccountVerificationTimeoutException;
+import org.thoughtcrime.redphone.util.PeriodicActionUtils;
 import org.thoughtcrime.redphone.util.Util;
 
 import java.util.concurrent.ExecutorService;
@@ -49,12 +51,14 @@ import java.util.concurrent.Executors;
 
 public class RegistrationService extends Service {
 
-  public static final String NOTIFICATION_TITLE     = "org.thoughtcrime.redphone.NOTIFICATION_TITLE";
-  public static final String NOTIFICATION_TEXT      = "org.thoughtcrime.redphone.NOTIFICATION_TEXT";
-  public static final String REGISTER_NUMBER_ACTION = "org.thoughtcrime.redphone.RegistrationService.REGISTER_NUMBER";
-  public static final String CHALLENGE_EVENT        = "org.thoughtcrime.redphone.CHALLENGE_EVENT";
-  public static final String REGISTRATION_EVENT     = "org.thoughtcrime.redphone.REGISTRATION_EVENT";
-  public static final String CHALLENGE_EXTRA        = "CAAChallenge";
+  public static final String NOTIFICATION_TITLE           = "org.thoughtcrime.redphone.NOTIFICATION_TITLE";
+  public static final String NOTIFICATION_TEXT            = "org.thoughtcrime.redphone.NOTIFICATION_TEXT";
+  public static final String REGISTER_NUMBER_ACTION       = "org.thoughtcrime.redphone.RegistrationService.REGISTER_NUMBER";
+  public static final String VOICE_REGISTER_NUMBER_ACTION = "org.thoughtcrime.redphone.RegistrationService.VOICE_REGISTER_NUMBER";
+  public static final String VOICE_REQUESTED_ACTION       = "org.thoughtcrime.redphone.RegistrationService.VOICE_REQUESTED";
+  public static final String CHALLENGE_EVENT              = "org.thoughtcrime.redphone.CHALLENGE_EVENT";
+  public static final String REGISTRATION_EVENT           = "org.thoughtcrime.redphone.REGISTRATION_EVENT";
+  public static final String CHALLENGE_EXTRA              = "CAAChallenge";
 
   private static final long REGISTRATION_TIMEOUT_MILLIS = 120000;
 
@@ -70,13 +74,23 @@ public class RegistrationService extends Service {
 
   @Override
   public int onStartCommand(final Intent intent, int flags, int startId) {
-    if (intent != null && intent.getAction().equals(REGISTER_NUMBER_ACTION)) {
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          handleRegistrationIntent(intent);
-        }
-      });
+    if (intent != null) {
+      final String action = intent.getAction();
+
+      if (action.equals(REGISTER_NUMBER_ACTION)       ||
+          action.equals(VOICE_REGISTER_NUMBER_ACTION) ||
+          action.equals(VOICE_REQUESTED_ACTION))
+      {
+        executor.execute(new Runnable() {
+          @Override
+          public void run() {
+            if      (action.equals(REGISTER_NUMBER_ACTION))       handleRegistrationIntent(intent);
+            else if (action.equals(VOICE_REGISTER_NUMBER_ACTION)) handleVoiceRegistrationIntent(intent);
+            else if (action.equals(VOICE_REQUESTED_ACTION))       handleVoiceRequestedIntent(intent);
+          }
+        });
+
+      }
     }
 
     return START_NOT_STICKY;
@@ -113,17 +127,53 @@ public class RegistrationService extends Service {
     return registrationState;
   }
 
-  private void initializeChallengeListener() {
+  private synchronized void initializeChallengeListener() {
     this.challenge      = null;
     receiver            = new ChallengeReceiver();
     IntentFilter filter = new IntentFilter(CHALLENGE_EVENT);
     registerReceiver(receiver, filter);
   }
 
-  private void shutdownChallengeListener() {
+  private synchronized void shutdownChallengeListener() {
     if (receiver != null) {
       unregisterReceiver(receiver);
       receiver = null;
+    }
+  }
+
+  private void handleVoiceRequestedIntent(Intent intent) {
+    setState(new RegistrationState(RegistrationState.STATE_VOICE_REQUESTED,
+                                   intent.getStringExtra("e164number"),
+                                   intent.getStringExtra("password")));
+  }
+
+  private void handleVoiceRegistrationIntent(Intent intent) {
+    markAsVerifying(true);
+
+    String number   = intent.getStringExtra("e164number");
+    String password = intent.getStringExtra("password");
+    String key      = intent.getStringExtra("key");
+
+    AccountCreationSocket socket = null;
+
+    try {
+      setState(new RegistrationState(RegistrationState.STATE_VERIFYING_VOICE, number));
+      markAsVerified(number, password, key);
+
+      socket = new AccountCreationSocket(this, number, password);
+
+      GCMRegistrarHelper.registerClient(this, true);
+      retrieveDirectory(socket);
+      setState(new RegistrationState(RegistrationState.STATE_COMPLETE, number));
+      broadcastComplete(true);
+      stopService(new Intent(this, RedPhoneService.class));
+    } catch (SignalingException se) {
+      Log.w("RegistrationService", se);
+      setState(new RegistrationState(RegistrationState.STATE_NETWORK_ERROR, number));
+      broadcastComplete(false);
+    } finally {
+      if (socket != null)
+        socket.close();
     }
   }
 
@@ -141,19 +191,20 @@ public class RegistrationService extends Service {
 
       setState(new RegistrationState(RegistrationState.STATE_CONNECTING, number));
       socket = new AccountCreationSocket(this, number, password);
-      socket.createAccount();
+      socket.createAccount(false);
       socket.close();
 
-      setState(new RegistrationState(RegistrationState.STATE_VERIFYING, number));
+      setState(new RegistrationState(RegistrationState.STATE_VERIFYING_SMS, number));
       String challenge = waitForChallenge();
       socket           = new AccountCreationSocket(this, number, password);
       socket.verifyAccount(challenge, key);
-      socket.close();
 
       markAsVerified(number, password, key);
 
       GCMRegistrarHelper.registerClient(this, true);
       retrieveDirectory(socket);
+      socket.close();
+
       setState(new RegistrationState(RegistrationState.STATE_COMPLETE, number));
       broadcastComplete(true);
       stopService(new Intent(this, RedPhoneService.class));
@@ -167,6 +218,10 @@ public class RegistrationService extends Service {
       broadcastComplete(false);
     } catch (AccountCreationException ace) {
       Log.w("RegistrationService", ace);
+      setState(new RegistrationState(RegistrationState.STATE_NETWORK_ERROR, number));
+      broadcastComplete(false);
+    } catch (RateLimitExceededException e) {
+      Log.w("RegistrationService", e);
       setState(new RegistrationState(RegistrationState.STATE_NETWORK_ERROR, number));
       broadcastComplete(false);
     } finally {
@@ -211,7 +266,7 @@ public class RegistrationService extends Service {
       Log.w("RegistrationService", se);
     }
 
-    DirectoryUpdateReceiver.scheduleDirectoryUpdate(this);
+    PeriodicActionUtils.scheduleUpdate(this, DirectoryUpdateReceiver.class);
   }
 
   private void markAsVerifying(boolean verifying) {
@@ -239,7 +294,7 @@ public class RegistrationService extends Service {
     this.registrationState = state;
 
     if (registrationStateHandler != null) {
-      registrationStateHandler.obtainMessage(state.state, state.number).sendToTarget();
+      registrationStateHandler.obtainMessage(state.state, state).sendToTarget();
     }
   }
 
@@ -278,24 +333,32 @@ public class RegistrationService extends Service {
 
   public static class RegistrationState {
 
-    public static final int STATE_IDLE          = 0;
-    public static final int STATE_CONNECTING    = 1;
-    public static final int STATE_VERIFYING     = 2;
-    public static final int STATE_TIMER         = 3;
-    public static final int STATE_COMPLETE      = 4;
-    public static final int STATE_TIMEOUT       = 5;
-    public static final int STATE_NETWORK_ERROR = 6;
+    public static final int STATE_IDLE            = 0;
+    public static final int STATE_CONNECTING      = 1;
+    public static final int STATE_VERIFYING_SMS   = 2;
+    public static final int STATE_TIMER           = 3;
+    public static final int STATE_COMPLETE        = 4;
+    public static final int STATE_TIMEOUT         = 5;
+    public static final int STATE_NETWORK_ERROR   = 6;
+    public static final int STATE_VOICE_REQUESTED = 7;
+    public static final int STATE_VERIFYING_VOICE = 8;
 
     public final int    state;
     public final String number;
+    public final String password;
 
     public RegistrationState(int state) {
       this(state, null);
     }
 
     public RegistrationState(int state, String number) {
-      this.state  = state;
-      this.number = number;
+      this(state, number, null);
+    }
+
+    public RegistrationState(int state, String number, String password) {
+      this.state    = state;
+      this.number   = number;
+      this.password = password;
     }
   }
 }

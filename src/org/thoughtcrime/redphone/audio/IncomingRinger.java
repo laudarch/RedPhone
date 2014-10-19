@@ -31,11 +31,11 @@ import android.util.Log;
 import java.io.IOException;
 
 /**
- * Plays the 'incoming call' ringtone and manages the audio player state associated with this
- * process.
- *
- * @author Stuart O. Anderson
- */
+* Plays the 'incoming call' ringtone and manages the audio player state associated with this
+* process.
+*
+* @author Stuart O. Anderson
+*/
 public class IncomingRinger {
   private static final String TAG = IncomingRinger.class.getName();
   private static final long[] VIBRATE_PATTERN = {0, 1000, 1000};
@@ -73,15 +73,19 @@ public class IncomingRinger {
   }
 
   public void start() {
-    //TODO request audio gain here
-    //audioManager).requestAudioFocus( )
+    AudioManager audioManager = (AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
+    audioManager.requestAudioFocus(new AudioManager.OnAudioFocusChangeListener() {
+                                     @Override
+                                     public void onAudioFocusChange(int focusChange) {}
+                                   },
+                                   AudioManager.STREAM_MUSIC,
+                                   AudioManager.AUDIOFOCUS_GAIN);
 
     if(player == null) {
       //retry player creation to pick up changed ringtones or audio server restarts
       player = createPlayer();
     }
 
-    AudioManager audioManager = (AudioManager)context.getSystemService(Context.AUDIO_SERVICE);
     int ringerMode = audioManager.getRingerMode();
 
     if (shouldVibrate()) {

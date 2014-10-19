@@ -17,12 +17,16 @@
 
 package org.thoughtcrime.redphone.crypto.zrtp;
 
+import android.content.Context;
 import android.util.Log;
 
 import org.thoughtcrime.redphone.Release;
 import org.thoughtcrime.redphone.crypto.SecureRtpSocket;
+import org.thoughtcrime.redphone.crypto.zrtp.retained.InitiatorRetainedSecretsCalculator;
+import org.thoughtcrime.redphone.crypto.zrtp.retained.RetainedSecrets;
+import org.thoughtcrime.redphone.crypto.zrtp.retained.RetainedSecretsCalculator;
+import org.thoughtcrime.redphone.crypto.zrtp.retained.RetainedSecretsDerivatives;
 
-import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -43,11 +47,16 @@ public class ZRTPInitiatorSocket extends ZRTPSocket {
   private DHPartOnePacket foreignDH;
   private DHPartTwoPacket localDH;
 
-  private final byte[] zid;
+  private ConfirmOnePacket confirmPacket;
 
-  public ZRTPInitiatorSocket(SecureRtpSocket socket, byte[] zid) {
-    super(socket, EXPECTING_HELLO);
-    this.zid = zid;
+  private RetainedSecretsCalculator retainedSecretsCalculator;
+  private boolean includeLegacyHeaderBug;
+
+  public ZRTPInitiatorSocket(Context context, SecureRtpSocket socket,
+                             byte[] localZid, String foreignNumber)
+  {
+    super(context, socket, localZid, foreignNumber, EXPECTING_HELLO);
+    this.includeLegacyHeaderBug = false;
   }
 
   @Override
@@ -57,12 +66,19 @@ public class ZRTPInitiatorSocket extends ZRTPSocket {
 
   @Override
   protected void handleConfirmAck(HandshakePacket packet) {
+    boolean continuity = retainedSecretsCalculator.hasContinuity(foreignDH.getDerivativeSecretOne(),
+                                                                 foreignDH.getDerivativeSecretTwo());
+    byte[] foreignZid  = foreignHello.getZID();
+    byte[] rs1         = masterSecret.getRetainedSecret();
+    long expiration    = System.currentTimeMillis() + (confirmPacket.getCacheTime() * 1000L);
+
+    cacheRetainedSecret(remoteNumber, foreignZid, rs1, expiration, continuity);
     setState(HANDSHAKE_COMPLETE);
   }
 
   @Override
   protected void handleConfirmOne(HandshakePacket packet) throws InvalidPacketException {
-    ConfirmOnePacket confirmPacket = new ConfirmOnePacket(packet, isLegacyConfirmConnection());
+    confirmPacket = new ConfirmOnePacket(packet, isLegacyConfirmConnection());
 
     confirmPacket.verifyMac(masterSecret.getResponderMacKey());
     confirmPacket.decrypt(masterSecret.getResponderZrtpKey());
@@ -73,7 +89,8 @@ public class ZRTPInitiatorSocket extends ZRTPSocket {
     setState(EXPECTING_CONFIRM_ACK);
     sendFreshPacket(new ConfirmTwoPacket(masterSecret.getInitiatorMacKey(),
                                          masterSecret.getInitiatorZrtpKey(),
-                                         this.hashChain, isLegacyConfirmConnection()));
+                                         this.hashChain, isLegacyConfirmConnection(),
+                                         includeLegacyHeaderBug));
   }
 
   @Override
@@ -113,7 +130,10 @@ public class ZRTPInitiatorSocket extends ZRTPSocket {
     byte[] totalHash    = calculator.calculateTotalHash(foreignHello, commitPacket,
                                                         foreignDH, localDH);
 
-    byte[] sharedSecret = calculator.calculateSharedSecret(dhResult, totalHash,
+    byte[] s1           = retainedSecretsCalculator.getS1(foreignDH.getDerivativeSecretOne(),
+                                                          foreignDH.getDerivativeSecretTwo());
+
+    byte[] sharedSecret = calculator.calculateSharedSecret(dhResult, totalHash, s1,
                                                            localHello.getZID(),
                                                            foreignHello.getZID());
 
@@ -126,16 +146,20 @@ public class ZRTPInitiatorSocket extends ZRTPSocket {
 
   @Override
   protected void handleHelloAck(HandshakePacket packet) throws InvalidPacketException {
+    RetainedSecrets retainedSecrets        = getRetainedSecrets(remoteNumber, foreignHello.getZID());
+    retainedSecretsCalculator              = new InitiatorRetainedSecretsCalculator(retainedSecrets);
+    RetainedSecretsDerivatives derivatives = retainedSecretsCalculator.getRetainedSecretsDerivatives();
+
     switch (getKeyAgreementType()) {
     case KA_TYPE_EC25:
-      localDH = new EC25DHPartTwoPacket(hashChain, getPublicKey());
+      localDH = new EC25DHPartTwoPacket(hashChain, getPublicKey(), derivatives, includeLegacyHeaderBug);
       break;
     case KA_TYPE_DH3K:
-      localDH = new DH3KDHPartTwoPacket(hashChain, getPublicKey());
+      localDH = new DH3KDHPartTwoPacket(hashChain, getPublicKey(), derivatives, includeLegacyHeaderBug);
       break;
     }
 
-    commitPacket = new CommitPacket(hashChain, foreignHello.getMessageBytes(), localDH, zid);
+    commitPacket = new CommitPacket(hashChain, foreignHello.getMessageBytes(), localDH, localZid, includeLegacyHeaderBug);
 
     setState(EXPECTING_DH_1);
     sendFreshPacket(commitPacket);
@@ -143,8 +167,9 @@ public class ZRTPInitiatorSocket extends ZRTPSocket {
 
   @Override
   protected void handleHello(HandshakePacket packet) throws InvalidPacketException {
-    foreignHello = new HelloPacket(packet, true);
-    localHello   = new HelloPacket(hashChain, zid);
+    foreignHello           = new HelloPacket(packet, true);
+    includeLegacyHeaderBug = foreignHello.isLegacyHeaderBugPresent();
+    localHello             = new HelloPacket(hashChain, localZid, includeLegacyHeaderBug);
 
     setState(EXPECTING_HELLO_ACK);
     sendFreshPacket(localHello);

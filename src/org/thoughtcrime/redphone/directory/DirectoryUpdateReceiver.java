@@ -23,12 +23,15 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
+import org.thoughtcrime.redphone.Constants;
 import org.thoughtcrime.redphone.signaling.DirectoryResponse;
 import org.thoughtcrime.redphone.signaling.SignalingException;
 import org.thoughtcrime.redphone.signaling.SignalingSocket;
+import org.thoughtcrime.redphone.util.PeriodicActionUtils;
 
 import java.util.Random;
 
@@ -43,50 +46,34 @@ import java.util.Random;
 public class DirectoryUpdateReceiver extends BroadcastReceiver {
 
   @Override
-  public void onReceive(Context context, Intent intent) {
+  public void onReceive(final Context context, Intent intent) {
     Log.w("DirectoryUpdateReceiver", "Initiating scheduled directory update...");
 
-    try {
-      SignalingSocket signalingSocket = new SignalingSocket(context);
-      DirectoryResponse response      = signalingSocket.getNumberFilter();
-
-      if (response != null) {
-        NumberFilter filter = new NumberFilter(response.getFilter(), response.getHashCount());
-        filter.serializeToFile(context);
-      }
-    } catch (SignalingException se) {
-      Log.w("DirectoryUpdateReceiver", se);
-    } catch (Exception e) {
-      Log.w("DirectoryUpdateReceiver", e);
-      return;
-    }
-
-    scheduleDirectoryUpdate(context);
-  }
-
-  public static void scheduleDirectoryUpdate(Context context) {
     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-    AlarmManager am               = (AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
-    Intent intent                 = new Intent(context, DirectoryUpdateReceiver.class);
-    PendingIntent sender          = PendingIntent.getBroadcast(context, 0, intent,
-                                                               PendingIntent.FLAG_UPDATE_CURRENT);
-    Random random                 = new Random(System.currentTimeMillis());
-    long offset                   = random.nextLong() % (12 * 60 * 60* 1000);
-    long interval                 = (24 * 60 * 60 * 1000) + offset;
-    long scheduledTime            = preferences.getLong("pref_scheduled_directory_update", -1);
 
-    if (scheduledTime == -1 || scheduledTime <= System.currentTimeMillis()) {
-      scheduledTime = System.currentTimeMillis() + interval;
-      preferences.edit().putLong("pref_scheduled_directory_update", scheduledTime).commit();
-      Log.w("DirectoryUpdateReceiver", "Scheduling for all new time: " + scheduledTime);
-    } else {
-      Log.w("DirectoryUpdateReceiver", "Scheduling for time found in preferences: " +
-            scheduledTime);
+    if (preferences.getBoolean(Constants.REGISTERED_PREFERENCE, false)) {
+      new AsyncTask<Void, Void, Void>() {
+        @Override
+        protected Void doInBackground(Void... params) {
+          try {
+            SignalingSocket signalingSocket = new SignalingSocket(context);
+            DirectoryResponse response      = signalingSocket.getNumberFilter();
+
+            if (response != null) {
+              NumberFilter filter = new NumberFilter(response.getFilter(), response.getHashCount());
+              filter.serializeToFile(context);
+            }
+          } catch (SignalingException se) {
+            Log.w("DirectoryUpdateReceiver", se);
+          } catch (Exception e) {
+            Log.w("DirectoryUpdateReceiver", e);
+          }
+
+          return null;
+        }
+      }.execute();
+
+      PeriodicActionUtils.scheduleUpdate(context, DirectoryUpdateReceiver.class);
     }
-
-    am.cancel(sender);
-    am.set(AlarmManager.RTC_WAKEUP, scheduledTime, sender);
-
-    Log.w("DirectoryUpdateReceiver", "Scheduled for: " + scheduledTime);
   }
 }
