@@ -17,16 +17,23 @@
 
 package org.thoughtcrime.redphone.crypto.zrtp;
 
+import android.content.Context;
 import android.util.Log;
 
 import org.spongycastle.jce.interfaces.ECPublicKey;
 import org.spongycastle.math.ec.ECPoint;
 import org.thoughtcrime.redphone.Release;
 import org.thoughtcrime.redphone.crypto.SecureRtpSocket;
+import org.thoughtcrime.redphone.crypto.zrtp.retained.RetainedSecrets;
+import org.thoughtcrime.redphone.database.DatabaseFactory;
+import org.thoughtcrime.redphone.database.RetainedSecretsDatabase;
 import org.thoughtcrime.redphone.util.Conversions;
 
+import javax.crypto.interfaces.DHPublicKey;
+import javax.crypto.spec.DHParameterSpec;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.DatagramSocket;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -34,9 +41,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Security;
 import java.security.spec.ECGenParameterSpec;
-
-import javax.crypto.interfaces.DHPublicKey;
-import javax.crypto.spec.DHParameterSpec;
 
 /**
  * The base ZRTP socket implementation.
@@ -81,16 +85,24 @@ public abstract class ZRTPSocket {
   private int  sequence           = 0;
   private int  state;
 
-  private SecureRtpSocket socket;
-  private HandshakePacket lastPacket;
+  private   final Context context;
+  private   final SecureRtpSocket socket;
+  protected final byte[] localZid;
+  protected final String remoteNumber;
 
+  private HandshakePacket lastPacket;
   private KeyPair dh3kKeyPair;
   private KeyPair ec25KeyPair;
 
   protected HashChain hashChain;
   protected MasterSecret masterSecret;
 
-  public ZRTPSocket(SecureRtpSocket socket, int initialState) {
+  public ZRTPSocket(Context context, SecureRtpSocket socket,
+                    byte[] localZid, String remoteNumber, int initialState)
+  {
+    this.context           = context.getApplicationContext();
+    this.localZid          = localZid;
+    this.remoteNumber      = remoteNumber;
     this.socket            = socket;
     this.state             = initialState;
     this.dh3kKeyPair       = initializeDH3kKeys();
@@ -98,6 +110,18 @@ public abstract class ZRTPSocket {
     this.hashChain         = new HashChain();
 
     this.socket.setTimeout(RETRANSMIT_INTERVAL_MILLIS);
+  }
+
+  public String getRemoteIp() {
+    return socket.getRemoteIp();
+  }
+
+  public int getRemotePort() {
+    return socket.getRemotePort();
+  }
+
+  public DatagramSocket getDatagramSocket() {
+    return socket.getDatagramSocket();
   }
 
   protected abstract void handleHello(HandshakePacket packet) throws InvalidPacketException;
@@ -152,13 +176,26 @@ public abstract class ZRTPSocket {
     return Conversions.combine(x, y);
   }
 
+  protected RetainedSecrets getRetainedSecrets(String number, byte[] zid) {
+    RetainedSecretsDatabase database = DatabaseFactory.getRetainedSecretsDatabase(context);
+    return database.getRetainedSecrets(number, zid);
+  }
+
+  protected void cacheRetainedSecret(String number, byte[] zid, byte[] rs1,
+                                     long expiration, boolean continuity)
+  {
+    RetainedSecretsDatabase database = DatabaseFactory.getRetainedSecretsDatabase(context);
+    database.setRetainedSecret(number, zid, rs1, expiration, continuity);
+  }
+
+
   // NOTE -- There was a bug in older versions of RedPhone in which the
   // Confirm message IVs were miscalculated.  It didn't seem to be an
   // immediately exploitable problem, but was definitely wrong.  Fixing it,
   // however, results in compatibility issues with devices that do not have
   // the fix.  We're temporarily introducing a backwards compatibility setting
   // here, where we intentionally do the wrong thing for older devices.  We'll
-  // faze this out after a couple of months.
+  // phase this out after a couple of months.
   protected boolean isLegacyConfirmConnection() {
     RedPhoneClientId clientId = new RedPhoneClientId(getForeignHello().getClientId());
     return clientId.isLegacyConfirmConnectionVersion();
@@ -250,6 +287,18 @@ public abstract class ZRTPSocket {
     return this.masterSecret;
   }
 
+  public SASInfo getSasInfo() {
+    RetainedSecretsDatabase database    = DatabaseFactory.getRetainedSecretsDatabase(context);
+    String                  sasText     = SASCalculator.calculateSAS(masterSecret.getSAS());
+    boolean                 sasVerified = database.isVerified(remoteNumber, getForeignHello().getZID());
+
+    return new SASInfo(sasText, sasVerified);
+  }
+
+  public void setSasVerified() {
+    DatabaseFactory.getRetainedSecretsDatabase(context).setVerified(remoteNumber, getForeignHello().getZID());
+  }
+
   public void close() {
     state = TERMINATED;
     socket.close();
@@ -258,7 +307,7 @@ public abstract class ZRTPSocket {
   public void negotiateStart() throws NegotiationFailedException {
     try {
       while (state == EXPECTING_HELLO) {
-        HandshakePacket packet = socket.receiveHandshakePacket();
+        HandshakePacket packet = socket.receiveHandshakePacket(true);
 
         if (packet == null) {
           resendPacketIfTimeout();
@@ -282,7 +331,7 @@ public abstract class ZRTPSocket {
     try {
       while (state != HANDSHAKE_COMPLETE && state != TERMINATED) {
 
-        HandshakePacket packet = socket.receiveHandshakePacket();
+        HandshakePacket packet = socket.receiveHandshakePacket(state != EXPECTING_CONFIRM_ACK);
 
         if( packet != null ) {
           Log.w("ZRTPSocket", "Received packet: " + (packet != null ? packet.getType() : "null"));

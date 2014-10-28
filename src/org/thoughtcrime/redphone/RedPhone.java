@@ -19,15 +19,18 @@ package org.thoughtcrime.redphone;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -41,14 +44,15 @@ import android.widget.Toast;
 
 import org.thoughtcrime.redphone.codec.CodecSetupException;
 import org.thoughtcrime.redphone.contacts.PersonInfo;
+import org.thoughtcrime.redphone.crypto.zrtp.SASInfo;
 import org.thoughtcrime.redphone.directory.DirectoryUpdateReceiver;
-import org.thoughtcrime.redphone.ui.ApplicationPreferencesActivity;
 import org.thoughtcrime.redphone.ui.CallControls;
 import org.thoughtcrime.redphone.ui.CallScreen;
-import org.thoughtcrime.redphone.ui.InCallAudioButton;
-import org.thoughtcrime.redphone.ui.QualityReporting;
 import org.thoughtcrime.redphone.util.AudioUtils;
+import org.thoughtcrime.redphone.util.PeriodicActionUtils;
 
+
+import java.security.Security;
 import java.util.ArrayList;
 
 /**
@@ -61,6 +65,10 @@ import java.util.ArrayList;
  *
  */
 public class RedPhone extends Activity {
+  static {
+    Security.addProvider(new org.spongycastle.jce.provider.BouncyCastleProvider());
+  }
+
 
   private static final int REMOTE_TERMINATE = 0;
   private static final int LOCAL_TERMINATE  = 1;
@@ -99,6 +107,7 @@ public class RedPhone extends Activity {
   private boolean deliveringTimingData = false;
   private RedPhoneService redPhoneService;
   private CallScreen callScreen;
+  private BroadcastReceiver bluetoothStateReceiver;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -119,6 +128,7 @@ public class RedPhone extends Activity {
     super.onResume();
 
     initializeServiceBinding();
+    registerBluetoothReceiver();
   }
 
 
@@ -127,6 +137,7 @@ public class RedPhone extends Activity {
     super.onPause();
 
     unbindService(serviceConnection);
+    unregisterReceiver(bluetoothStateReceiver);
   }
 
   @Override
@@ -168,8 +179,9 @@ public class RedPhone extends Activity {
     callScreen.setIncomingCallActionListener(new IncomingCallActionListener());
     callScreen.setMuteButtonListener(new MuteButtonListener());
     callScreen.setAudioButtonListener(new AudioButtonListener());
+    callScreen.setConfirmSasButtonListener(new ConfirmSasButtonListener());
 
-    DirectoryUpdateReceiver.scheduleDirectoryUpdate(this);
+    PeriodicActionUtils.scheduleUpdate(this, DirectoryUpdateReceiver.class);
   }
 
   private void sendInstallLink(String user) {
@@ -255,7 +267,7 @@ public class RedPhone extends Activity {
     delayedFinish(BUSY_SIGNAL_DELAY_FINISH);
   }
 
-  private void handleCallConnected(String sas) {
+  private void handleCallConnected(SASInfo sas) {
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_IGNORE_CHEEK_PRESSES);
     callScreen.setActiveCall(redPhoneService.getRemotePersonInfo(),
                              getString(R.string.RedPhone_connected), sas);
@@ -361,7 +373,7 @@ public class RedPhone extends Activity {
   private void handleCodecFailure(CodecSetupException e) {
     Log.w("RedPhone", e);
     Toast.makeText(this, R.string.RedPhone_codec_failed_to_initialize, Toast.LENGTH_LONG).show();
-    handleTerminate( LOCAL_TERMINATE );
+    handleTerminate(LOCAL_TERMINATE);
   }
 
   private void delayedFinish() {
@@ -372,15 +384,7 @@ public class RedPhone extends Activity {
     callStateHandler.postDelayed(new Runnable() {
 
     public void run() {
-      if (Release.DELIVER_DIAGNOSTIC_DATA &&
-          ApplicationPreferencesActivity.getAskUserToSendDiagnosticData(RedPhone.this)) {
-        if( !deliveringTimingData) {
-          deliveringTimingData = true;
-          QualityReporting.sendDiagnosticData(RedPhone.this);
-        }
-      } else {
-        RedPhone.this.finish();
-      }
+      RedPhone.this.finish();
     }}, delayMillis);
   }
 
@@ -389,7 +393,7 @@ public class RedPhone extends Activity {
     public void handleMessage(Message message) {
       Log.w("RedPhone", "Got message from service: " + message.what);
       switch (message.what) {
-      case HANDLE_CALL_CONNECTED:          handleCallConnected((String)message.obj);                break;
+      case HANDLE_CALL_CONNECTED:          handleCallConnected((SASInfo)message.obj);               break;
       case HANDLE_SERVER_FAILURE:          handleServerFailure();                                   break;
       case HANDLE_PERFORMING_HANDSHAKE:    handlePerformingHandshake();                             break;
       case HANDLE_HANDSHAKE_FAILED:        handleHandshakeFailed();                                 break;
@@ -410,6 +414,14 @@ public class RedPhone extends Activity {
     }
   }
 
+  private class ConfirmSasButtonListener implements CallControls.ConfirmSasButtonListener {
+    public void onClick() {
+      Intent intent = new Intent(RedPhone.this, RedPhoneService.class);
+      intent.setAction(RedPhoneService.ACTION_CONFIRM_SAS);
+      startService(intent);
+    }
+  }
+
   private class HangupButtonListener implements CallControls.HangupButtonListener {
     public void onClick() {
       Log.w("RedPhone", "Hangup pressed, handling termination now...");
@@ -417,7 +429,7 @@ public class RedPhone extends Activity {
       intent.setAction(RedPhoneService.ACTION_HANGUP_CALL);
       startService(intent);
 
-      RedPhone.this.handleTerminate( LOCAL_TERMINATE );
+      RedPhone.this.handleTerminate(LOCAL_TERMINATE);
     }
   }
 
@@ -428,15 +440,32 @@ public class RedPhone extends Activity {
     }
   }
 
+  private void registerBluetoothReceiver() {
+    IntentFilter filter = new IntentFilter();
+    filter.addAction(AudioUtils.getScoUpdateAction());
+    bluetoothStateReceiver = new BroadcastReceiver() {
+      @Override
+      public void onReceive(Context context, Intent intent) {
+        callScreen.notifyBluetoothChange();
+      }
+    };
+
+    registerReceiver(bluetoothStateReceiver, filter);
+    callScreen.notifyBluetoothChange();
+  }
+
   private class AudioButtonListener implements CallControls.AudioButtonListener {
     @Override
-    public void onAudioChange(InCallAudioButton.AudioMode mode) {
+    public void onAudioChange(AudioUtils.AudioMode mode) {
       switch(mode) {
         case DEFAULT:
           AudioUtils.enableDefaultRouting(RedPhone.this);
           break;
         case SPEAKER:
           AudioUtils.enableSpeakerphoneRouting(RedPhone.this);
+          break;
+        case HEADSET:
+          AudioUtils.enableBluetoothRouting(RedPhone.this);
           break;
         default:
           throw new IllegalStateException("Audio mode " + mode + " is not supported.");

@@ -18,12 +18,7 @@
 package org.thoughtcrime.redphone.call;
 
 import android.content.Context;
-import android.content.pm.PackageManager.NameNotFoundException;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.os.Build;
 import android.os.Process;
-import android.text.format.DateFormat;
 import android.util.Log;
 
 import org.thoughtcrime.redphone.audio.AudioException;
@@ -32,7 +27,7 @@ import org.thoughtcrime.redphone.crypto.SecureRtpSocket;
 import org.thoughtcrime.redphone.crypto.zrtp.MasterSecret;
 import org.thoughtcrime.redphone.crypto.zrtp.NegotiationFailedException;
 import org.thoughtcrime.redphone.crypto.zrtp.RecipientUnavailableException;
-import org.thoughtcrime.redphone.crypto.zrtp.SASCalculator;
+import org.thoughtcrime.redphone.crypto.zrtp.SASInfo;
 import org.thoughtcrime.redphone.crypto.zrtp.ZRTPSocket;
 import org.thoughtcrime.redphone.signaling.SessionDescriptor;
 import org.thoughtcrime.redphone.signaling.SignalingSocket;
@@ -40,7 +35,11 @@ import org.thoughtcrime.redphone.ui.ApplicationPreferencesActivity;
 import org.thoughtcrime.redphone.util.AudioUtils;
 
 import java.io.IOException;
-import java.util.Date;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.net.SocketException;
+
+//import org.thoughtcrime.redphone.audio.CallAudioManager;
 
 /**
  * The base class for both Initiating and Responder call
@@ -52,23 +51,23 @@ import java.util.Date;
  */
 
 public abstract class CallManager extends Thread {
-  private static final String CODEC_NAME = "SPEEX";
 
-  protected final String remoteNumber;
+  protected final String            remoteNumber;
   protected final CallStateListener callStateListener;
-  protected final Context context;
+  protected final Context           context;
 
-  private boolean terminated;
-  private boolean loopbackMode;
-  private CallAudioManager callAudioManager;
-  private SignalManager signalManager;
-  private String sas;
-  private boolean muteEnabled;
+  private   boolean          terminated;
+  private   boolean          loopbackMode;
+  protected CallAudioManager callAudioManager;
+  private   SignalManager    signalManager;
+  private   SASInfo          sasInfo;
+  private   boolean          muteEnabled;
+  private   boolean          callConnected;
 
   protected SessionDescriptor sessionDescriptor;
-  protected ZRTPSocket zrtpSocket;
-  protected SecureRtpSocket secureSocket;
-  protected SignalingSocket signalingSocket;
+  protected ZRTPSocket        zrtpSocket;
+  protected SecureRtpSocket   secureSocket;
+  protected SignalingSocket   signalingSocket;
 
   public CallManager(Context context, CallStateListener callStateListener,
                     String remoteNumber, String threadName)
@@ -80,7 +79,6 @@ public abstract class CallManager extends Thread {
     this.context           = context;
     this.loopbackMode      = ApplicationPreferencesActivity.getLoopbackEnabled(context);
 
-    printInitDebug();
     AudioUtils.resetConfiguration(context);
   }
 
@@ -91,8 +89,6 @@ public abstract class CallManager extends Thread {
     try {
       Log.d( "CallManager", "negotiating..." );
       if (!terminated) {
-        callAudioManager = new CallAudioManager(secureSocket, CODEC_NAME, context);
-        callAudioManager.setMute(muteEnabled);
         zrtpSocket.negotiateStart();
       }
 
@@ -102,14 +98,15 @@ public abstract class CallManager extends Thread {
       }
 
       if (!terminated) {
-        setSecureSocketKeys(zrtpSocket.getMasterSecret());
-        sas = SASCalculator.calculateSAS(zrtpSocket.getMasterSecret().getSAS());
-        callStateListener.notifyCallConnected(sas);
+        sasInfo = zrtpSocket.getSasInfo();
+        callStateListener.notifyCallConnected(sasInfo);
       }
 
       if (!terminated) {
         Log.d("CallManager", "Finished handshake, calling run() on CallAudioManager...");
-        callAudioManager.run();
+        callConnected = true;
+        runAudio(zrtpSocket.getDatagramSocket(), zrtpSocket.getRemoteIp(),
+                 zrtpSocket.getRemotePort(), zrtpSocket.getMasterSecret(), muteEnabled);
       }
 
     } catch (RecipientUnavailableException rue) {
@@ -144,8 +141,13 @@ public abstract class CallManager extends Thread {
     return this.sessionDescriptor;
   }
 
-  public String getSAS() {
-    return this.sas;
+  public SASInfo getSasInfo() {
+    return this.sasInfo;
+  }
+
+  public void setSasVerified() {
+    if (zrtpSocket != null)
+      zrtpSocket.setSasVerified();
   }
 
   protected void processSignals() {
@@ -153,48 +155,37 @@ public abstract class CallManager extends Thread {
     this.signalManager = new SignalManager(callStateListener, signalingSocket, sessionDescriptor);
   }
 
-  protected abstract void setSecureSocketKeys(MasterSecret masterSecret);
+  protected abstract void runAudio(DatagramSocket datagramSocket, String remoteIp, int remotePort,
+                                   MasterSecret masterSecret, boolean muteEnabled)
+      throws SocketException, AudioException;
 
-  ///**********************
-  // Methods below are SOA's loopback and testing shims.
-
-  private void printInitDebug() {
-    Context c = context;
-    String vName = "unknown";
-    try {
-        vName = c.getPackageManager().getPackageInfo("org.thoughtcrime.redphone", 0).versionName;
-    } catch (NameNotFoundException e) {
-    }
-
-    ConnectivityManager cm = (ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
-    NetworkInfo networkInfo = cm.getActiveNetworkInfo();
-
-    Date date = new Date();
-    Log.d( "CallManager", "Initializing:"
-            + " audioMode: " + ApplicationPreferencesActivity.getAudioModeIncall(c)
-            + " singleThread: " + ApplicationPreferencesActivity.isSingleThread(c)
-            + " device: " + Build.DEVICE
-            + " manufacturer: " + Build.MANUFACTURER
-            + " os-version: " + Build.VERSION.RELEASE
-            + " product: " + Build.PRODUCT
-            + " redphone-version: " + vName
-            + " network-type: " + (networkInfo == null ? null : networkInfo.getTypeName())
-            + " network-subtype: " + (networkInfo == null ? null : networkInfo.getSubtypeName())
-            + " network-extra: " + (networkInfo == null ? null : networkInfo.getExtraInfo())
-            + " time: " + DateFormat.getDateFormat(context).format(date) + DateFormat.getTimeFormat(context).format(date)
-            );
-  }
-
-  //For loopback operation
-  public void doLoopback() throws AudioException, IOException {
-    callAudioManager = new CallAudioManager( null, "SPEEX", context );
-    callAudioManager.run();
-  }
 
   public void setMute(boolean enabled) {
     muteEnabled = enabled;
-    if(callAudioManager != null) {
+    if (callAudioManager != null) {
       callAudioManager.setMute(muteEnabled);
     }
+  }
+
+  /**
+   * Did this call ever successfully complete SRTP setup
+   * @return true if the call connected
+   */
+  public boolean callConnected() {
+    return callConnected;
+  }
+
+  ///**********************
+  // Methods below are SOA's loopback and testing shims.
+  //For loopback operation
+  public void doLoopback() throws AudioException, IOException {
+    DatagramSocket socket = new DatagramSocket(2222);
+    socket.connect(new InetSocketAddress("127.0.0.1", 2222));
+
+    this.callAudioManager = new CallAudioManager(socket, "127.0.0.1", 2222,
+                                                 new byte[16], new byte[20], new byte[14],
+                                                 new byte[16], new byte[20], new byte[14]);
+
+    this.callAudioManager.start();
   }
 }

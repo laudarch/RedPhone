@@ -25,23 +25,15 @@
     <string name="RedPhone_yes_exclamation">Yes!</string>
     <string name="RedPhone_codec_failed_to_initialize">Codec Failed to Initialize</string>
 
-    <string name="RedPhoneService_missed_redphone_call">Missed RedPhone Call</string>
-
-    <string name="MicrophoneReader_microphone_failed_to_initialize_try_changing_audio_call_mode_in_settings">Microphone failed to initialize.  Try changing Audio Call Mode in Settings?</string>
-
-    <string name="RobustAudioTrack_audiotrack_did_not_initialize">AudioTrack did not initialize</string>
-
     <string name="AboutActivity_about_redphone">About RedPhone</string>
     <string name="AboutActivity_redphone_beta_s">RedPhone Beta %s</string>
 
     <string name="ApplicationPreferencesActivity_redphone_settings">RedPhone Settings</string>
-    <string name="ApplicationPreferencesActivity_updating_signaling_method">Updating Signaling Method</string>
-    <string name="ApplicationPreferencesActivity_changing_signaling_method_this_could_take_a_second">Changing signaling method, this could take a second...</string>
-    <string name="ApplicationPreferencesActivity_error_registering_with_c2dm_server">Error registering with C2DM server...</string>
-    <string name="ApplicationPreferencesActivity_error_unregistering_with_c2dm_server">Error unregistering with C2DM server...</string>
-    <string name="ApplicationPreferencesActivity_error_communicating_with_c2dm_server">Error communicating with C2DM server...</string>
-    
+
     <string name="CallScreen_incoming_call">Incoming call...</string>
+    <string name="CallScreen_audio_menu_handset">Handset</string>
+    <string name="CallScreen_audio_menu_speaker">Speaker</string>
+    <string name="CallScreen_audio_menu_headset">Bluetooth</string>
 
     <string name="ContactsListActivity_loading">Loading...</string>
     <string name="ContactsListActivity_no_contacts_found">No contacts found.</string>    
@@ -59,22 +51,36 @@
     <string name="NotificationBarManager_redphone_call_in_progress">RedPhone call in progress</string>
     <string name="NotificationBarManager_missed_redphone_call_from_s">Missed RedPhone call from %s</string>
     <string name="NotificationBarManager_missed_redphone_call">Missed RedPhone call</string>
-    
-    <string name="QualityReporting_would_you_like_to_send_diagnostic_information_about_this_call_to_whisper_systems">Would you like to send diagnostic information about this call to Whisper Systems?</string>
-    <string name="QualityReporting_never">Never</string>
-    <string name="QualityReporting_send_diagnostics">Send Diagnostics?</string>
 
     <string name="RecentCallListActivity_loading">Loading...</string>
     <string name="RecentCallListActivity_empty_call_log">Empty call log.</string>    
     
-    <string name="RedPhoneChooser_upgrade_to_redphone">Upgrade to RedPhone?</string>
-    <string name="RedPhoneChooser_this_contact_also_uses_redphone_would_you_like_to_upgrade_to_a_secure_call">This contact also uses RedPhone. Would you like to upgrade to a secure call?</string>
-    <string name="RedPhoneChooser_secure_call">Secure Call</string>
-    <string name="RedPhoneChooser_insecure_call">Insecure Call</string>
+    <string name="RedPhoneChooser_upgrade_to_redphone">Secure with RedPhone?</string>
+    <string name="RedPhoneChooser_secure_call">Yes, secure</string>
+    <string name="RedPhoneChooser_insecure_call">No</string>
     
     <string name="RegistrationProgressActivity_verifying_number">Verifying number</string>
     <string name="RegistrationProgressActivity_edit_s">Edit %s</string>
     <string name="RegistrationProgressActivity_registration_complete">Registration complete!</string>
+    <string name="RegistrationProgressActivity_possible_problems">Possible problems.</string>
+    <string name="RegistrationProgressActivity_you_must_enter_the_code_you_received_first">You must enter the code you received first...</string>
+    <string name="RegistrationProgressActivity_connecting">Connecting</string>
+    <string name="RegistrationProgressActivity_connecting_for_verification">Connecting for verification...</string>
+    <string name="RegistrationProgressActivity_network_error">Network Error!</string>
+    <string name="RegistrationProgressActivity_unable_to_connect">Unable to connect. Please check your network connection and try again.</string>
+    <string name="RegistrationProgressActivity_verification_failed">Verification Failed!</string>
+    <string name="RegistrationProgressActivity_the_verification_code_you_submitted_is_incorrect">The verification code you submitted is incorrect. Please try again.</string>
+    <string name="RegistrationProgressActivity_too_many_attempts">Too many attempts</string>
+    <string name="RegistrationProgressActivity_youve_submitted_an_incorrect_verification_code_too_many_times">You\'ve submitted an incorrect verification code too many times. Please wait a minute before trying again.</string>
+    <string name="RegistrationProgressActivity_requesting_call">Requesting Call</string>
+    <string name="RegistrationProgressActivity_requesting_incoming_call">Requesting incoming verification call...</string>
+    <string name="RegistrationProgressActivity_server_error">Server Error</string>
+    <string name="RegistrationProgressActivity_the_server_encountered_an_error">The server encountered an error. Please try again.</string>
+    <string name="RegistrationProgressActivity_too_many_requests">Too Many Requests!</string>
+    <string name="RegistrationProgressActivity_youve_already_requested_a_voice_call">You\'ve already recently requested a voice call. You can request another in 20 minutes.</string>
+    <string name="RegistrationProgressActivity_verifying_voice_code">Verifying voice code...</string>
+
+    <string name="RegistrationProblemsActivity_possible_problems">Possible Problems</string>
 
     <string name="RegistrationService_registration_complete">Registration complete</string>
     <string name="RegistrationService_redphone_registration_has_successfully_completed">RedPhone registration has successfully completed.</string>
@@ -84,23 +90,21 @@
     <string name="about_activity__additional_information">Additional information:</string>
     <string name="about_activity__attribution">Attribution:</string>
     <string name="about_activity__aboutText">Please see whispersystems.org for additional information, or contact support@whispersystems.org with problems, questions, or comments.</string>
-    <string name="about_activity__attributionText">RedPhone links to the SpanDSP library, which is licensed under the LGPL.\n\nRedPhone uses the SPEEX Codec, which is used under the Xiph.Org variant of the BSD license: © 2002-2003, Jean-Marc Valin/Xiph.Org Foundation\n\nRedistribution and use of the SPEEX library in source and binary forms, with or without modification, are permitted provided that the following conditions are met:\n\n\t* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.\n\t* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.\n\t* Neither the name of the Xiph.org Foundation nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.\n\nThe SPEEX library is provided by the copyright holders and contributors “as is” and any express or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the foundation or contributors be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this software, even if advised of the possibility of such damage.\n\n\nSome sound samples are licensed under the Creative Commons Sampling Plus License: http://creativecommons.org/licenses/sampling+/1.0/\n\nBy acclivity (http://www.freesound.org/usersViewSingle.php?id=37876):\nShipsBell.wav (http://www.freesound.org/samplesViewSingle.php?id=32304)\n\nBy Splashdust (http://www.freesound.org/usersViewSingle.php?id=754949):\nnegativebeep.wav (http://www.freesound.org/samplesViewSingle.php?id=67454)\n\nBy Peter_Gross (http://www.freesound.org/usersViewSingle.php?id=33429):\nSonar_pings.ogg (http://www.freesound.org/samplesViewSingle.php?id=12677\n\nBy suonho: http://www.freesound.org/samplesViewSingle.php?id=58348: ambienta_soundtrack_moog_sweep\n\nBy Mike Koenig: Busy Signal</string>    
-    
+    <string name="about_activity__attributionText">RedPhone links to the SpanDSP library, which is licensed under the LGPL.\n\nRedPhone uses the SPEEX Codec, which is used under the Xiph.Org variant of the BSD license: © 2002-2003, Jean-Marc Valin/Xiph.Org Foundation\n\nRedistribution and use of the SPEEX library in source and binary forms, with or without modification, are permitted provided that the following conditions are met:\n\n\t* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.\n\t* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.\n\t* Neither the name of the Xiph.org Foundation nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.\n\nThe SPEEX library is provided by the copyright holders and contributors “as is” and any express or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the foundation or contributors be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this software, even if advised of the possibility of such damage.\n\n\nSome sound samples are licensed under the Creative Commons Sampling Plus License: http://creativecommons.org/licenses/sampling+/1.0/\n\nBy acclivity (http://www.freesound.org/usersViewSingle.php?id=37876):\nShipsBell.wav (http://www.freesound.org/samplesViewSingle.php?id=32304)\n\nBy Splashdust (http://www.freesound.org/usersViewSingle.php?id=754949):\nnegativebeep.wav (http://www.freesound.org/samplesViewSingle.php?id=67454)\n\nBy Peter_Gross (http://www.freesound.org/usersViewSingle.php?id=33429):\nSonar_pings.ogg (http://www.freesound.org/samplesViewSingle.php?id=12677\n\nBy suonho: http://www.freesound.org/samplesViewSingle.php?id=58348: ambienta_soundtrack_moog_sweep\n\nBy Mike Koenig: Busy Signal</string>
+
+    <string name="call_controls__redphone_call">REDPHONE CALL</string>
+
+    <string name="call_card__redphone_call">RedPhone Call</string>
+
     <string name="create_account__register">Register</string>
     <string name="create_acount__please_confirm_your_country_code_and_phone_number">In order to make and receive secure calls, RedPhone needs to verify your phone number and register it with the system.\n\nPlease confirm your country code and phone number for this device.</string>
     <string name="create_account__your_country">YOUR COUNTRY</string>
     <string name="create_account__your_country_code_and_phone_number">YOUR COUNTRY CODE AND PHONE NUMBER</string>
     <string name="create_account__phone_number">phone number</string>
     
-    <string name="contacts_list_content__search">Search</string>
-
     <string name="country_selection_fragment__search">Search...</string>
     <string name="country_selection_fragment__loading_countries">Loading countries...</string>
-    
-    <string name="outbound_chooser__you_ve_initiated_a_call_with_a_contact_who_also_uses_redphone_would_you_like_to_upgrade_this_to_a_redphone_call">You\'ve initiated a call with a contact who also uses RedPhone. Would you like to upgrade this to a RedPhone call?</string>
-    <string name="outbound_chooser__secure_call">Secure Call</string>
-    <string name="outbound_chooser__insecure_call">Insecure Call</string>
-    
+
     <string name="about_menu__about">About</string>
     
     <string name="contact_list_options_menu__search">Search</string>
@@ -116,18 +120,9 @@
     <string name="preferences__general_settings">General Settings</string>
     <string name="preferences__prompt_for_call_upgrade">Prompt for call upgrade</string>
     <string name="preferences__when_making_insecure_calls_prompt_for_upgrade_to_redphone_if_contact_is_redphone_enabled">When making insecure calls, prompt for upgrade to RedPhone if contact is RedPhone-enabled.</string>
-    <string name="preferences__advanced_signaling_settings">Advanced: Signaling Settings</string>
     <string name="preferences__advanced_audio_settings">Advanced: Audio Settings</string>
-    <string name="preferences__enable_audio_compatibility_mode_higher_latency">Enable Audio Compatibility Mode [higher latency]</string>
-    <string name="preferences__compatibility_mode">Compatibility Mode</string>
-    <string name="preferences__use_in_call_audio_mode">Use In-Call Audio Mode</string>
-    <string name="preferences__enable_if_audio_comes_from_rear_speaker">Enable if audio comes from rear speaker</string>
-    <string name="preferences__single_thread_mode">Single-Thread Mode</string>
-    <string name="preferences__may_improve_performance_on_some_devices">May improve performance on some devices</string>
-    <string name="preferences__force_minimum_latency">Force minimum latency</string>
-    <string name="preferences__reduce_latency_at_the_expense_of_audio_quality">Reduce latency at the expense of audio quality</string>
-    <string name="preferences__signaling_method">Signaling Method</string>
-    <string name="preferences__modify_the_method_used_to_notify_your_device_of_incoming_calls">Modify the method used to notify your device of incoming calls.</string>
+    <string name="preferences__disable_bluetooth">Enable Bluetooth</string>
+    <string name="preferences__disable_bluetooth_summary">Disabling Bluetooth may resolve audio issues on some devices</string>
 
     <string name="registration_progress__sms_verification_failed">SMS verification failed.</string>
     <string name="registration_progress__redphone_timed_out_while_waiting_for_an_sms_message_to_verify_your_phone_number">RedPhone timed out while waiting for an SMS message to verify your phone number.</string>
@@ -150,6 +145,11 @@
     <string name="registration_progress__waiting_for_sms_verification">Waiting for SMS verification...</string>
     <string name="registration_progress__this_could_take_a_moment_please_be_patient_well_notify_you_when_verification_is_complete">This could take a moment. Please be patient, we\'ll notify you when verification is complete.</string>
     <string name="registration_progress__waiting_for_sms">WAITING FOR SMS</string>
-
+    <string name="registration_progress__voice_verification">Voice Verification</string>
+    <string name="registration_progress__redphone_can_also_call_you_to_verify_your_number">RedPhone can also call you to verify your number. Tap \'Call Me\' and enter the six digit code that you hear below.</string>
+    <string name="registration_progress__verify">Verify</string>
+    <string name="registration_progress__call_me">Call Me</string>
+    <string name="CallAudioManager__sorry_there_was_a_problem_initializing_the_audio_on_your_device">Sorry, there was a problem initializing the audio on your device.</string>
+    <string name="DialPadActivity_you_must_dial_a_number_first">You must dial a number first</string>
     <!-- EOF -->
 </resources>

@@ -18,12 +18,14 @@
 package org.thoughtcrime.redphone.ui;
 
 import android.content.Context;
+import android.content.Intent;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
 import android.widget.FrameLayout;
 
 import org.thoughtcrime.redphone.R;
 import org.thoughtcrime.redphone.contacts.PersonInfo;
+import org.thoughtcrime.redphone.crypto.zrtp.SASInfo;
 
 /**
  * A UI widget that encapsulates the entire in-call screen
@@ -52,7 +54,7 @@ public class CallScreen extends FrameLayout {
     initialize();
   }
 
-  public void setActiveCall(PersonInfo personInfo, String message, String sas) {
+  public void setActiveCall(PersonInfo personInfo, String message, SASInfo sas) {
     callCard.setCard(personInfo, message);
     callControls.setActiveCall(sas);
   }
@@ -70,6 +72,10 @@ public class CallScreen extends FrameLayout {
   public void reset() {
     callCard.reset();
     callControls.reset();
+  }
+
+  public void setConfirmSasButtonListener(CallControls.ConfirmSasButtonListener listener) {
+    callControls.setConfirmSasButtonListener(listener);
   }
 
   public void setHangupButtonListener(CallControls.HangupButtonListener listener) {
@@ -95,5 +101,9 @@ public class CallScreen extends FrameLayout {
 
     this.callCard     = (CallCard)findViewById(R.id.callCard);
     this.callControls = (CallControls)findViewById(R.id.callControls);
+  }
+
+  public void notifyBluetoothChange() {
+    callControls.updateAudioButton();
   }
 }
